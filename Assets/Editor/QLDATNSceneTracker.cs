@@ -27,7 +27,7 @@ namespace QLDATN.ProjectTracker
         private const double HeartbeatSeconds = 30.0;
         private const double GitRefreshSeconds = 60.0;
         private const double RecentSourceActivitySeconds = 90.0;
-        private const string ClientVersion = "qldatn-unity-3.8.0";
+        private const string ClientVersion = "qldatn-unity-3.9.0";
         private const string PendingUpdatePreference = "QLDATN_PROJECT_TRACKER_PENDING_UPDATE";
         private const int MaximumOfflinePayloads = 50;
         private const string TrackerFileName = "QLDATNSceneTracker.cs";
@@ -298,6 +298,34 @@ namespace QLDATN.ProjectTracker
             )
             {
                 QueueSend(CurrentStatus(), "REVISION_CHANGED", 1, 0, true, _revision);
+            }
+        }
+
+        /// <summary>
+        /// SHA-256 của chính file tracker này, đã chuẩn hoá CRLF -> LF để khớp server.
+        /// CẢNH BÁO: giá trị do client tự tính và tự khai; client độc hại chỉ cần khai
+        /// đúng hash là qua. Chỉ phát hiện trôi phiên bản / sửa nhầm, KHÔNG phải ranh
+        /// giới bảo mật.
+        /// </summary>
+        private static string ComputeSourceSha256()
+        {
+            try
+            {
+                var trackerPath = Path.Combine(Application.dataPath, "Editor", TrackerFileName);
+                if (!File.Exists(trackerPath)) return null;
+                var source = File.ReadAllText(trackerPath, Encoding.UTF8).Replace("\r\n", "\n").Replace("\r", "\n");
+                using (var sha = SHA256.Create())
+                {
+                    var hash = sha.ComputeHash(Encoding.UTF8.GetBytes(source));
+                    var builder = new StringBuilder(hash.Length * 2);
+                    foreach (var value in hash) builder.Append(value.ToString("x2"));
+                    return builder.ToString();
+                }
+            }
+            catch
+            {
+                // Chỉ là tín hiệu tham khảo; không được làm gián đoạn heartbeat.
+                return null;
             }
         }
 
@@ -698,7 +726,9 @@ namespace QLDATN.ProjectTracker
                     editorFocused = IsEditorFocused(),
                     aiAgentDetected = agentScan.detected,
                     aiAgentName = agentScan.name,
-                    aiAgentFootprint = agentScan.footprint
+                    aiAgentFootprint = agentScan.footprint,
+                    sourceVersion = ClientVersion,
+                    sourceSha256 = ComputeSourceSha256()
                 },
                 eventInfo = string.IsNullOrEmpty(eventType)
                     ? null
@@ -1476,6 +1506,8 @@ namespace QLDATN.ProjectTracker
             public bool aiAgentDetected;
             public string aiAgentName;
             public string aiAgentFootprint;
+            public string sourceVersion;
+            public string sourceSha256;
         }
 
         [Serializable]
